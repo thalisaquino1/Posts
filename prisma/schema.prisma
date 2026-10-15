@@ -1,0 +1,96 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  USER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DemandStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum HistoryAction {
+  CREATED
+  ASSIGNED
+  STATUS_CHANGED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(USER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdDemands  Demand[]        @relation("DemandCreator")
+  assignedDemands Demand[]        @relation("DemandAssignee")
+  history         DemandHistory[]
+  refreshTokens   RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Demand {
+  id           String       @id @default(uuid()) @db.Uuid
+  title        String
+  description  String?
+  priority     Priority     @default(MEDIUM)
+  status       DemandStatus @default(OPEN)
+  createdById  String       @db.Uuid
+  createdBy    User         @relation("DemandCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  assignedToId String?      @db.Uuid
+  assignedTo   User?        @relation("DemandAssignee", fields: [assignedToId], references: [id], onDelete: Restrict)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  history DemandHistory[]
+
+  @@index([status])
+  @@index([createdById])
+  @@index([assignedToId])
+}
+
+model DemandHistory {
+  id            String        @id @default(uuid()) @db.Uuid
+  demandId      String        @db.Uuid
+  demand        Demand        @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  action        HistoryAction
+  performedById String        @db.Uuid
+  performedBy   User          @relation(fields: [performedById], references: [id], onDelete: Restrict)
+  details       Json?
+  createdAt     DateTime      @default(now())
+
+  @@index([demandId, createdAt])
+}
